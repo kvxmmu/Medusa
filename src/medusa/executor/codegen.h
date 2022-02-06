@@ -9,6 +9,37 @@
 #include "insn.h"
 #include "../safe.h"
 
+#define MF_JOIN2(a, b) a##_##b
+#define GEN_OFFSET_INSN(name, insn) static inline insn_off_t MF_JOIN2(emitter_emit, name)(VMEmitter *emitter, insn_off_t global_offset, reg_t hreg1) { \
+    insn_off_t flag; \
+    insn_off_t chunk; \
+    insn_off_t reg1 = hreg1; \
+    if (global_offset <= MAX20BIT) { \
+        flag = FULL_INSN; \
+    } else { \
+        flag          = PARTIAL_INSN; \
+        chunk         = global_offset >> 20u;\
+        global_offset = global_offset & MAX20BIT; \
+    } \
+    emitter_emit( \
+        emitter, \
+        MACHINIC, \
+        (insn), \
+        (reg1 << 20) | (global_offset) | flag \
+    ); \
+    if (global_offset > MAX20BIT) { \
+        emitter_emit( \
+            emitter, \
+            EXTENDED, \
+            CONST_CHUNK, \
+            chunk   \
+        ); \
+        return 2; \
+    } else { \
+        return 1; \
+    } \
+}
+
 typedef struct {
     size_t insns;
     size_t capacity;
@@ -34,6 +65,15 @@ void emitter_emit(
     uint32_t args
 );
 
+void emitter_emit_noop(
+    VMEmitter *emitter
+);
+
+void emitter_emit_iprint(
+    VMEmitter *emitter,
+    reg_t reg
+);
+
 static inline void emitter_free(VMEmitter *emitter) {
     if (unlikely(emitter->buffer == NULL)) {
         return;
@@ -41,5 +81,7 @@ static inline void emitter_free(VMEmitter *emitter) {
 
     free(emitter->buffer);
 }
+
+GEN_OFFSET_INSN(jmp, JMP)
 
 #endif
